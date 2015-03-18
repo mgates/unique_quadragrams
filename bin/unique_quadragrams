@@ -1,0 +1,56 @@
+#!/usr/bin/env ruby
+require 'optparse'
+Dir[File.expand_path('../../lib/**/*.rb', __FILE__)].each { |f| require f }
+
+class Application
+  attr_reader :flags
+  attr_reader :files
+
+  def initialize(params)
+    @flags, @files = {}, []
+    parse_options(params)
+  end
+
+  def run
+    dictionary = open_dictionary(@files[0])
+    quads, words = open_output(@files[1]), open_output(@files[2])
+    UniqueQuadragrams.new.find(dictionary, quads, words)
+  end
+
+  private
+
+  def parse_options(params)
+    parser = OptionParser.new
+    parser.on('-f') { @flags[:force] = true }
+    @files = parser.parse(params)
+    help_message("There weren't enough arguments.") unless @files.length == 3
+  end
+
+  def open_dictionary(path)
+    path == '-' ? STDIN : File.open(path, "r")
+  rescue Errno::ENOENT
+    help_message("The dictionary file doesn't exist.")
+  end
+
+  def open_output(path)
+    open_flags = File::WRONLY | File::CREAT | (@flags[:force] ? 0 : File::EXCL)
+    path == '-' ? STDOUT : File.open(path, open_flags)
+  rescue Errno::EEXIST
+    help_message("#{path} exists; use -f to overwrite it.")
+  end
+
+  def help_message(extra)
+    STDERR.print <<-END
+    #{extra}
+usage: #{File.basename($PROGRAM_NAME)} dictionaryfile quadragramsfile wordsfile
+  use - for dictionaryfile to read from STDIN
+  use - for an output file to write to STDOUT
+    if you use - for both output files, you'll have to split it up yourself
+options:
+  -f overwrite files if they exist
+    END
+    exit 1
+  end
+end
+
+Application.new(ARGV).run
